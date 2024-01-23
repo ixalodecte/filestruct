@@ -1,0 +1,6 @@
+include *.txt
+include *.md
+include *.py
+include setup.cfg
+
+global-exclude *.pyc
