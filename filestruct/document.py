@@ -31,6 +31,8 @@ def importance_scores(ls_fontnames, ls_colors, size_line):
 
 
 def normalize(data):
+    if data.max() == 0:
+        return 0
     return (data - data.min()) / (data.max() - data.min())
 
 
