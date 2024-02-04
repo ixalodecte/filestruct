@@ -104,7 +104,7 @@ class PDFDocument:
         spans = []
         for page in doc:
             # Récupère les blocs (paragraphe)
-            txt = page.get_text("dict", flags=4)["blocks"]
+            txt = page.get_text("dict", flags=4, sort=True)["blocks"]
             for paragraph in txt:
                 if paragraph["type"] == 0:
                     for line in paragraph["lines"]:
