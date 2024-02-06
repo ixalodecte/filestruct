@@ -10,7 +10,7 @@ As clever human beings, we are able to detect titles, subtitles, and paragraphs 
 2.  **Tree creation :** A tree is created, in which each block of text is a node of the tree. A child of a node in the tree is a subsection of a section in the document.
 3.  **Data exportation :** The data can be exported in JSON format.
 
-For now, only PDFs are supported, but I plan to add more file formats in the future.
+For now, filestruct can only read formats that are supported by PyMuPDF. This includes pdf, epub, xps, mobi, fb2, cbz and svg. I plan to add more file formats in the future.
 
 ## Installation
 
@@ -28,7 +28,7 @@ Bellow, a basic usage for a PDF document :
 ```python
 from filestruct.document import PDFDocument
 
-doc = PDFDocument("PATH_TO_YOUR_FILE.pdf")
+doc = Document("PATH_TO_YOUR_FILE.pdf")
 data = doc.to_json()   # Export the tree into json format
 print(data)
 print(doc)
