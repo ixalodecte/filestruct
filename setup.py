@@ -13,6 +13,8 @@ setup(
   version = '0.1.1',
   license='GPLv3+',
   description = 'A python package to structure files using visual and style informations',   # Give a short description about your library
+  long_description=long_description,
+  long_description_content_type='text/markdown',
   author = 'léo DECHAUMET',
   author_email = 'leo_dechaumet_research@pm.me',
   url = 'https://github.com/ixalodecte/filestruct',
