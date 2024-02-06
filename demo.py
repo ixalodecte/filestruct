@@ -1,6 +1,7 @@
-from filestruct.document import PDFDocument
+from filestruct.document import Document
 
-doc = PDFDocument("samples/sample.pdf")
+doc = Document()
+doc.open("samples/sample.pdf")
 data = doc.to_json()
 print(data)
 print(doc)

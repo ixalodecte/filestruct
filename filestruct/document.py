@@ -1,7 +1,9 @@
+import os
+
 import numpy as np
 import pandas as pd
 
-import fitz
+from filestruct import loader
 
 
 def isupper(txt):
@@ -55,35 +57,42 @@ def normalize(data):
     return (data - data.min()) / (data.max() - data.min())
 
 
-class PDFDocument:
+class Document:
     def __init__(
         self,
-        filename,
-        n_columns="auto",
-        txt_unidecode=True,
-        cut_span=True,
         font_factor=1,
         color_factor=1,
         size_factor=1,
         bold_bonus=1,
         upper_bonus=1,
     ):
+        self.font_factor = font_factor
+        self.color_factor = color_factor
+        self.size_factor = size_factor
+        self.bold_bonus = bold_bonus
+        self.upper_bonus = upper_bonus
+        # Preprocess the text (do nothing for the moment)
+        self.preprocess_txt = lambda x: x
+
+    def open(self, filename, ext="auto"):
+        if ext == "auto":
+            _, ext = os.path.splitext(filename)
+            ext = ext[1:]
+        ext = ext.lower()
         self.filename = filename
-        self.blocks = self.extract_blocks()
+        if ext in ["pdf", "epub", "xps", "mobi", "fb2", "cbz", "svg"]:
+            self.blocks = loader.load_PyMuPDF(filename)
         self.block_data = pd.DataFrame(self.blocks)
         self.block_data.text = self.block_data.text.astype("string")
         self.block_data.font = self.block_data.font.astype("string")
 
-        # Preprocess the text (do nothing for the moment)
-        self.preprocess_txt = lambda x: x
-
         # Assign a level to each span according to its importance
         self.score_span(
-            font_factor=font_factor,
-            color_factor=color_factor,
-            size_factor=size_factor,
-            bold_bonus=bold_bonus,
-            upper_bonus=upper_bonus,
+            font_factor=self.font_factor,
+            color_factor=self.color_factor,
+            size_factor=self.size_factor,
+            bold_bonus=self.bold_bonus,
+            upper_bonus=self.upper_bonus,
         )
 
         # determine level of text using scores
@@ -109,42 +118,6 @@ class PDFDocument:
                 self.roots.append(idx)
 
     # --------- Function used in the initialization part ----------------
-
-    def extract_blocks(self):
-        doc = fitz.open(self.filename)
-        page_id = 0
-        paragraph_id = 0
-        line_id = 0
-        span_id = 0
-        spans = []
-        for page in doc:
-            txt = page.get_text("dict", flags=4, sort=True)["blocks"]
-            for paragraph in txt:
-                if paragraph["type"] == 0:
-                    for line in paragraph["lines"]:
-                        for span in line["spans"]:
-                            d = {
-                                "size": span["size"],
-                                "flags": span["flags"],
-                                "font": span["font"],
-                                "color": span["color"],
-                                "text": span["text"],
-                                "x": span["bbox"][0],
-                                "y": span["bbox"][1],
-                                "w": span["bbox"][2],
-                                "h": span["bbox"][3],
-                                "page_id": page_id,
-                                "paragraph_id": paragraph_id,
-                                "page_id": page_id,
-                                "line_id": line_id,
-                                "span_id": span_id,
-                            }
-                            spans.append(d)
-                            span_id += 1
-                        line_id += 1
-                    paragraph_id += 1
-            page_id += 1
-        return spans
 
     def score_span(
         self, font_factor=1, color_factor=1, size_factor=1, bold_bonus=1, upper_bonus=1
