@@ -13,6 +13,25 @@ def isupper(txt):
 
 
 def importance_scores(ls_fontnames, ls_colors, size_line):
+    """
+    Calculate the rarity of font, colors, in the text.
+
+    Parameters
+    ----------
+    ls_fontnames : array_like
+        the name of the font for each spans.
+    ls_colors : array_like
+        the color for each spans.
+    size_line : array_like
+        the number of charactère for each spans.
+
+    Returns
+    -------
+    (array, array)
+        return 2 array that contain respectively font rarity and
+        color rarity
+
+    """
     rarity_fonts = {}
     rarity_colors = {}
     for font in np.unique(ls_fontnames):
@@ -55,15 +74,11 @@ class PDFDocument:
         self.block_data.text = self.block_data.text.astype("string")
         self.block_data.font = self.block_data.font.astype("string")
 
+        # Preprocess the text (do nothing for the moment)
         self.preprocess_txt = lambda x: x
-        # if txt_unidecode == True:
-        #    self.preprocess_txt = unidecode
 
-        # On ouvre le document avec fitz
-        # doc = fitz.open(filename)
-
-        # Assign a level to each line according to its importance
-        self.level_size_font_color(
+        # Assign a level to each span according to its importance
+        self.score_span(
             font_factor=font_factor,
             color_factor=color_factor,
             size_factor=size_factor,
@@ -71,12 +86,12 @@ class PDFDocument:
             upper_bonus=upper_bonus,
         )
 
+        # determine level of text using scores
         self.down_level()
 
-        # ------------- Création du graphe --------------
-        # Création du graphe en fonction du level de chaque paragraphe.
-        # Chaque paragraphe est un sous noeud du premier paragraphe au dessus
-        # de lui qui possède un level plus grand (qui est plus important).
+        # ------------- Graph Creation --------------
+        # Create the graph according of the level of each span,
+        # and its position in the document.
 
         idxs = self["id"]
         score = self["score"]
@@ -103,7 +118,6 @@ class PDFDocument:
         span_id = 0
         spans = []
         for page in doc:
-            # Récupère les blocs (paragraphe)
             txt = page.get_text("dict", flags=4, sort=True)["blocks"]
             for paragraph in txt:
                 if paragraph["type"] == 0:
@@ -132,7 +146,7 @@ class PDFDocument:
             page_id += 1
         return spans
 
-    def level_size_font_color(
+    def score_span(
         self, font_factor=1, color_factor=1, size_factor=1, bold_bonus=1, upper_bonus=1
     ):
         """
@@ -147,24 +161,29 @@ class PDFDocument:
 
         """
 
-        # If all text is upper it is likely to be a title
-        upper = np.char.isupper(self["text"]) * upper_bonus
-
         colors = self["color"]
         fonts = self["font"]
         sizes = self["size"]
+        text = self["text"]
 
-        bold = np.char.find(np.char.lower(self["font"]), "bold") * bold_bonus
-        # bold == bold_bonus if "bold" is in fontnames, else = 0
+        # If all text is upper it is likely to be a title
+        upper = np.char.isupper(text) * upper_bonus
 
-        len_line = np.array([len(x) for x in self["text"]])
+        # Text is in bold
+        bold = np.char.find(np.char.lower(fonts), "bold") * bold_bonus
+
+        # Size of each span
+        len_line = np.array([len(x) for x in text])
 
         # Normalize the size between 0 and 1
         size_score = normalize(sizes)
 
+        # Calculate the score
         font_score, color_score = importance_scores(fonts, colors, len_line)
         font_score = normalize(font_score)
         color_score = normalize(color_score)
+
+        # Calculate the level (weighted sum)
         level = (
             font_score * font_factor
             + color_score * color_factor
