@@ -1,7 +1,5 @@
 import os
-
 import numpy as np
-import pandas as pd
 
 from filestruct import loader
 
@@ -81,10 +79,11 @@ class Document:
         ext = ext.lower()
         self.filename = filename
         if ext in ["pdf", "epub", "xps", "mobi", "fb2", "cbz", "svg"]:
-            self.blocks = loader.load_PyMuPDF(filename)
-        self.block_data = pd.DataFrame(self.blocks)
-        self.block_data.text = self.block_data.text.astype("string")
-        self.block_data.font = self.block_data.font.astype("string")
+            blocks = loader.load_PyMuPDF(filename)
+
+        # Transform list of dictionary (blocks) into dictonary of list (block_data)
+        self.block_data = {key: np.array([i[key] for i in blocks]) for key in blocks[0]}
+        self.block_data["id"] = np.arange(len(blocks))
 
         # Assign a level to each span according to its importance
         self.score_span(
@@ -204,7 +203,7 @@ class Document:
     def is_feuille(self, node):
         return not self.successeurs(node)  # si aucun successeur : feuille
 
-    # --------- Rendering the CV (print) ---------------
+    # --------- Rendering the document (print) ---------------
 
     def to_json(self):
         info = ["size", "font", "color", "text"]
@@ -235,12 +234,7 @@ class Document:
         return "\n".join([self.parcour_str(0, n) for n in self.roots])
 
     def __getitem__(self, key):
-        ret_dtype = None
-        if key == "id":
-            key = "span_id"
-        if self.block_data[key].dtype == "string":
-            ret_dtype = str
-        return self.block_data[key].to_numpy(dtype=ret_dtype)
+        return self.block_data[key]
 
     def __setitem__(self, key, value):
         self.block_data[key] = value

@@ -22,7 +22,6 @@ setup(
   download_url = 'https://github.com/ixalodecte/filestruct/archive/refs/tags/v0.2-alpha.tar.gz',
   keywords = ['pdf', 'parser', 'layout-analysis'],
   install_requires=[
-          'pandas',
           'numpy',
           'PyMuPDF'
       ],
