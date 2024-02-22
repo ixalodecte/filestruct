@@ -2,6 +2,8 @@ import os
 import numpy as np
 
 from filestruct import loader
+from filestruct.utils import unique_n_uplet
+from filestruct.loader import Style
 
 
 def isupper(txt):
@@ -49,10 +51,10 @@ def importance_scores(ls_fontnames, ls_colors, size_line):
     return np.array(font_score), np.array(color_score)
 
 
-def normalize(data):
-    if data.max() == 0:
+def normalize(value, mini, maxi):
+    if maxi == 0:
         return 0
-    return (data - data.min()) / (data.max() - data.min())
+    return (value - mini) / (maxi - mini)
 
 
 class Document:
@@ -79,7 +81,9 @@ class Document:
         ext = ext.lower()
         self.filename = filename
         if ext in ["pdf", "epub", "xps", "mobi", "fb2", "cbz", "svg"]:
-            blocks = loader.load_PyMuPDF(filename)
+            data = loader.load_PyMuPDF(filename)
+        blocks = data["span"]
+        self.style_set = data["style_set"]
 
         # Transform list of dictionary (blocks) into dictonary of list (block_data)
         self.block_data = {key: np.array([i[key] for i in blocks]) for key in blocks[0]}
@@ -133,45 +137,50 @@ class Document:
 
         """
 
-        colors = self["color"]
-        fonts = self["font"]
-        sizes = self["size"]
-        text = self["text"]
+        maxi_size = max(x.size for x in self.style_set)
+        mini_size = min(x.size for x in self.style_set)
+        char_num = self.get_n_char()
 
-        # If all text is upper it is likely to be a title
-        upper = np.char.isupper(text) * upper_bonus
+        for style in self.style_set:
+            # Normalize the size between 0 and 1
+            size_score = normalize(style.size, mini_size, maxi_size)
 
-        # Text is in bold
-        bold = np.char.find(np.char.lower(fonts), "bold") * bold_bonus
+            # Calculate the font rarity
+            font_num = sum(x.num_char for x in self.style_set if x.font == style.font)
+            font_score = 1 - font_num / char_num
 
-        # Size of each span
-        len_line = np.array([len(x) for x in text])
+            # Calculate the color rarity
+            color_num = sum(
+                x.num_char for x in self.style_set if x.color == style.color
+            )
+            color_score = 1 - color_num / char_num
 
-        # Normalize the size between 0 and 1
-        size_score = normalize(sizes)
+            bold = style.bold
+            upper = style.upper
 
-        # Calculate the score
-        font_score, color_score = importance_scores(fonts, colors, len_line)
-        font_score = normalize(font_score)
-        color_score = normalize(color_score)
-
-        # Calculate the level (weighted sum)
-        level = (
-            font_score * font_factor
-            + color_score * color_factor
-            + size_score * size_factor
-            + bold
-            + upper
-        )
-        self["score"] = level
+            # Calculate the total score (weighted sum)
+            score = (
+                font_score * font_factor
+                + color_score * color_factor
+                + size_score * size_factor
+                + bold
+                + upper
+            )
+            style.score = score
 
     def down_level(self):
-        levels = self["score"]
-        unique = list(sorted(np.unique(levels)))[::-1]
-        l = []
-        for e in levels:
-            l.append(unique.index(e))
-        self["level"] = np.array(l)
+        scores = self["score"]
+        unique = list(sorted(np.unique(scores)))[::-1]
+        levels = []
+        for s in scores:
+            levels.append(unique.index(s))
+        for s, l in zip(self["style"], levels):
+            s.level = l
+
+    def down_level(self):
+        scores = sorted(list(set(e.score for e in self.style_set)))[::-1]
+        for style in self.style_set:
+            style.level = scores.index(style.score)
 
     # --------- Graph section ------------------------
 
@@ -198,10 +207,13 @@ class Document:
         """
         return self.graph[node]
 
-    # --------- Utility function -----------
-
     def is_feuille(self, node):
         return not self.successeurs(node)  # si aucun successeur : feuille
+
+    # --------- Utility function -----------
+
+    def get_n_char(self):
+        return sum(x.num_char for x in self.style_set)
 
     # --------- Rendering the document (print) ---------------
 
@@ -227,14 +239,31 @@ class Document:
         str_succ = [
             self.parcour_str(indent_level + 1, n) for n in self.successeurs(node)
         ]
-
         return indent_level * 2 * " " + "\n".join([self["text"][node]] + str_succ)
+
+    def info(self):
+        page_n = len(np.unique(self["page_id"]))
+        paragraph_n = len(np.unique(self["paragraph_id"]))
+        line_n = np.unique(self["line_id"])
+        char_n = len("".join(self["text"]))
+        print(f"{page_n} page | {paragraph_n} paragraphs | {char_n} characters")
+        print()
+        styles_sorted = sorted(self.style_set, key=lambda x: x.level)
+        for style in styles_sorted:
+            print(f"level {style.level} :")
+            percentage = round((style.num_char / char_n) * 100)
+            print("  ", style, "|", str(percentage) + "%")
 
     def __str__(self):
         return "\n".join([self.parcour_str(0, n) for n in self.roots])
 
     def __getitem__(self, key):
-        return self.block_data[key]
+        if key in self.block_data:
+            return self.block_data[key]
+        elif key in Style.style_attribute:
+            return np.array([elt.__getattribute__(key) for elt in self["style"]])
+        else:
+            raise KeyError("f{key} not an attribute of Document or Style")
 
     def __setitem__(self, key, value):
         self.block_data[key] = value
